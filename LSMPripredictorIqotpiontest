@@ -1,0 +1,428 @@
+import warnings
+import datetime
+warnings.filterwarnings('ignore')
+import pickle
+import os
+from iqoptionapi.stable_api import IQ_Option
+iq = IQ_Option(f"marcosmordefronha123@gmail.com", "Meuovo123!")
+iq.connect()  # connect to iqoption
+#iq.get_all_init()
+temporizer = datetime.datetime.now().second
+import csv
+import pygame
+import pickle
+pygame.init()
+pygame.mixer.music.load('inicio.mp3')
+pygame.mixer.music.play()
+# definindo a variavel par
+par = 'EURGBP'
+bet_money = 500
+# definindo o time frame de 1m
+time_frame = 60
+nrtentativas = 0
+# definindo um sleep de 60s
+sleep_time = 62
+csv_file = 'dados2.csv'
+trade = True
+treinar = True
+# Importando as bibliotecas necessárias
+import tensorflow as tf
+import pandas as pd
+import numpy as np
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.optimizers import Adam
+from keras.models import load_model
+from sklearn.metrics import accuracy_score
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
+from keras.callbacks import EarlyStopping
+import keras.layers.normalization as normalization
+from tensorflow.keras.activations import softmax
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+import time
+ganhos_compra = []
+ganhos_venda = []
+trade = False
+tf.function(
+    func=None,
+    input_signature=None,
+    autograph=True,
+    jit_compile=None,
+    reduce_retracing=True,
+    experimental_implements=None,
+    experimental_autograph_options=None,
+    experimental_relax_shapes=None,
+    experimental_compile=None,
+    experimental_follow_type_hints=None
+)
+#tf.executing_eagerly()
+
+tf.config.run_functions_eagerly(True)
+@tf.function
+def fn():
+  with tf.init_scope():
+    print(tf.executing_eagerly())
+  print(tf.executing_eagerly())
+fn()
+galo = 0
+try:
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        # Currently, memory growth needs to be the same across GPUs
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+except Exception as e:
+    # Memory growth must be set before GPUs have been initialized
+    print(e)
+
+def decisao(pred):
+    if pred[1] > pred[0]:
+        return 1
+    elif pred[1] < pred[0]:
+        return 0
+    else:
+        return 2
+
+
+def checktempo():
+    while True:
+        time.sleep(1)
+        if  datetime.datetime.now().second == 2:
+            break
+        xd = "haha"
+
+def supresist(iq, par, time_frame):
+    velas = iq.get_candles(par, time_frame, 1000, time.time())
+    data = pd.DataFrame(velas)
+    data['supresist'] = 0
+    data.loc[(data['max'] < data['max'].shift(1)) & (data['max'] < data['max'].shift(-1)) & (
+                data['max'].shift(-1) < data['max'].shift(-2)), 'supresist'] = 1
+    data.loc[(data['min'] > data['min'].shift(1)) & (data['min'] > data['min'].shift(-1)) & (
+                data['min'].shift(-1) > data['min'].shift(-2)), 'supresist'] = 2
+
+    data = data.drop(columns='close')
+    data = data.drop(columns='open')
+    data = data.drop(columns='min')
+    data = data.drop(columns='max')
+    data = data.drop(columns='id')
+    data = data.drop(columns='from')
+    data = data.drop(columns='at')
+    data = data.drop(columns='to')
+    data = data.drop(columns='volume')
+    return data
+def getcores(par,iq):
+    velas = iq.get_candles(par, 60, 1000, time.time())
+
+    cores = pd.DataFrame(columns=['Cores'])
+    for i in range(1000):
+        red = velas[i]['close'] < velas[i]['open']
+        green = velas[i]['close'] > velas[i]['open']
+        doji = velas[i]['close'] == velas[i]['open']
+
+        if red == True:
+            cores.loc[i] = 0
+        elif green == True:
+            cores.loc[i] = 1
+        else:
+            cores.loc[i] = 2
+    return cores
+
+def adx(par, iq, time_frame, time, n=14):
+    velas = iq.get_candles(par, time_frame, 1000, time.time())
+    data = pd.DataFrame(velas)
+    X = data[["open", "close", "min", "max", "volume"]]
+    data['high_to_low'] = data['max'].sub(data['min'], axis=0)
+    data['high_to_close'] = abs(data['max'].sub(data['close'].shift(1), axis=0))
+    data['low_to_close'] = abs(data['min'].sub(data['close'].shift(1), axis=0))
+    data['TR'] = data[['high_to_low', 'high_to_close', 'low_to_close']].max(axis=1)
+    # Calculate the Average Directional Index (ADX)
+    data['ADX'] = data['TR'] * 10000
+    # Calculate the signal
+    data['Signal'] = np.where(data['ADX'] > 1, 2, 0)
+    data['Signal'] = np.where(data['ADX'] < 2, 1,0)
+
+    return data[['Signal']]
+
+def rsi(par,iq, time_frame):
+    ma_period = 14
+    velas = iq.get_candles(par, time_frame, 1000, time.time())
+    data = pd.DataFrame(velas)
+    X = data[["open", "close", "min", "max", "volume"]]
+    data['delta'] = data['close'] - data['open']
+    data['up'] = np.where(data['delta'] > 0, data['delta'], 0)
+    data['down'] = np.where(data['delta'] < 0, abs(data['delta']), 0)
+
+    avg_up_period = data['up'].rolling(window=ma_period).mean()
+    avg_down_period = data['down'].rolling(window=ma_period).mean()
+
+    rs = avg_up_period / avg_down_period
+    rsi = 100 - (100 / (1 + rs))
+    signal = []
+    for i in rsi:
+        if i > 0.70:
+            signal.append(1)
+        elif i < 0.30:
+            signal.append(2)
+        else:
+            signal.append(0)
+    df = pd.DataFrame(signal)
+    return df
+
+
+
+
+def macd(par, iq, time_frame):
+    ema_short = 12
+    ema_long = 26
+    signal = 9
+    velas = iq.get_candles(par, time_frame, 1000, time.time())
+    data = pd.DataFrame(velas)
+    X = data[["open", "close", "min", "max", "volume"]]
+    ema_short_data = X.ewm(span=ema_short).mean()
+    ema_long_data = X.ewm(span=ema_long).mean()
+    macd = ema_short_data - ema_long_data
+    signal_data = macd.ewm(span=signal).mean()
+    histogram = macd - signal_data
+    # Normalizando o histograma para o intervalo 0-100
+    min_value = histogram['close'].min()
+    max_value = histogram['close'].max()
+    histogram['close'] = histogram['close'].apply(lambda x: (x - min_value) / (max_value - min_value) * 100)
+    return histogram['close']
+import csv
+def prediction(par,iq,time_frame,time):
+    load_model('model222valid.h5')
+    acao = ""
+    velas = iq.get_candles(par, time_frame, 820, time.time())
+    data = pd.DataFrame(velas)
+    X = data[["open", "close", "min", "max", "volume"]]
+    saldo = blablabla = iq.get_balance()
+    data['SMA9'] = data['close'].ewm(span=9, adjust=False).mean()
+    data['SMA21'] = data['close'].ewm(span=21, adjust=False).mean()
+    data['Sup_Resist'] = supresist(iq, par, time_frame)
+    data['cores'] = getcores(par,iq)
+    data['TREND'] = np.where(data['SMA21'] > data['SMA9'], 1,0)
+    data['BB_upper'] = data['max'].ewm(span=15, adjust=False).mean()
+    data['BB_lower'] = data['min'].ewm(span=15, adjust=False).mean()
+    data['ADX'] = adx(par, iq, time_frame, time, n=14)
+    data['RSI'] = rsi(par,iq, time_frame)
+    data['MACD'] = macd(par, iq, time_frame)
+    data['SALDO'] = saldo
+    X = data[["open", "close", "min", "max",  "TREND", "BB_upper", "BB_lower","ADX","RSI","MACD","SALDO","Sup_Resist","cores"]]
+    # Preparando os dados para treinamento
+    # Normalizando os dados
+    scaler = MinMaxScaler()
+    X = scaler.fit_transform(X)
+    # Criando um dataframe com as colunas de dados normalizados
+    df = pd.DataFrame(X, columns=["open", "close", "min", "max", "TREND", "BB_upper",
+                                  "BB_lower","ADX","RSI","MACD","SALDO","Sup_Resist","cores"])
+    # Criando a coluna de labels com os valores de compra (1) e venda (0)
+    df['label'] = np.where(data['close'].shift(-1) < data['close'], 1,
+                           np.where(data['close'].shift(-1) > data['close'], 0, 2))
+    df.isna().sum()
+    df = df.fillna(0)
+    # Dividindo os dados em treino e teste
+    X_train, X_test, y_train, y_test = train_test_split(df.drop('label', axis=1), df['label'], test_size=0.2)
+    model = load_model('model222.h5')
+    previsao = model.predict(X_test[-1:])
+    score = model.evaluate(X_test, y_test, verbose=5)
+    decisoes = [np.round(pred[0]) for pred in previsao]
+    visu = np.array(decisoes)
+    print("ASSET/PAR/MOEDA", par)
+    print("SELL == 0 BUY == 1 PREDICTION =>",visu)
+    print('Precisão:', score[1],"%")
+    print("PROB OF Prediction 1 ::> ",previsao[0][0],"%")
+    print("PROB OF Prediction 2  ::>",previsao[0][1],"%")
+    if previsao[0][1] <= 0.5 :
+        acao = "SELL"
+    elif previsao[0][1] >= 0.5 :
+        acao = "BUY"
+    else:
+        acao = "WAIT"
+    print("ACTION=>",acao)
+    return acao, score[1]
+
+wins = 0
+loss = 0
+profit = 0
+stop_win = 40
+stop_loss = 5
+martin = 1
+# Definindo a lógica para realizar as operações
+
+while True:
+    load_model('model222valid.h5')
+    if treinar:
+        treinar = False
+        pd.read_csv('dados.csv')
+      #  load_model('model222valid.h5')
+        velas = iq.get_candles(par, time_frame, 1000, time.time())
+        data = pd.DataFrame(velas)
+        X = data[["open", "close", "min", "max", "volume"]]
+        # Adicionando indicadores técnicos
+        data['SMA9'] = data['close'].ewm(span=9, adjust=False).mean()
+        data['SMA21'] = data['close'].ewm(span=21, adjust=False).mean()
+        data['TREND'] = np.where(data['SMA21'] > data['SMA9'], 1,0)
+        data['cores'] = getcores(par, iq)
+        data['BB_upper'] = data['max'].ewm(span=10, adjust=False).mean()
+        data['BB_lower'] = data['min'].ewm(span=10, adjust=False).mean()
+        data['Sup_Resist'] = supresist(iq, par, time_frame)
+        data['ADX'] = adx(par, iq, time_frame, time, n=14)
+        data['RSI'] = rsi(par, iq, time_frame)
+        data['MACD'] = macd(par,iq, time_frame)
+        data['SALDO'] = iq.get_balance()
+        X = data[["open", "close", "min", "max", "TREND", "BB_upper", "BB_lower", "ADX", "RSI","MACD","SALDO","Sup_Resist","cores"]]
+        # Preparando os dados para treinamento
+        # Normalizando os dados
+        scaler = MinMaxScaler()
+        X = scaler.fit_transform(X)
+        df = pd.DataFrame(X, columns=["open", "close", "min", "max","TREND", "BB_upper",
+                                      "BB_lower", "ADX","RSI","MACD","SALDO","Sup_Resist","cores"])
+        # Criando a coluna de labels com os valores de compra (1) e venda (0)
+        df['label'] = np.where(data['close'].shift(-1) < data['close'], 1,
+                               np.where(data['close'].shift(-1) > data['close'], 0, 2))
+        df.isna().sum()
+        df = df.fillna(0)
+        # Dividindo os dados em treino e teste
+        X_train, X_test, y_train, y_test = train_test_split(df.drop('label', axis=1), df['label'], test_size=0.2)
+        # Criando o modelo de Random Forest
+        # Criando o modelo
+        learning_rate = 0.001
+        epochs = 50
+        batch_size = 128
+        model = Sequential()
+        model.add(Dense(128, activation='relu', input_dim=X_train.shape[1]))
+        model.add(Dropout(0.2))
+        model.add(BatchNormalization())
+        model.add(Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(
+           0.02)))
+        model.add(BatchNormalization())
+        model.add(Dense(64, activation='relu'))
+        model.add(Dropout(0.2))
+        model.add(BatchNormalization())
+        model.add(Dense(32, activation='relu'))
+        model.add(Dense(3, activation='softmax'))
+        model.compile(Adam(learning_rate=learning_rate, decay=5e-5), 'sparse_categorical_crossentropy', metrics=['accuracy'])
+        # Treinar o modelo
+        history = model.fit(
+            X_train,
+            y_train,
+            batch_size=batch_size,
+            epochs=epochs,
+            validation_data=(X_test, y_test),
+            callbacks=[
+                EarlyStopping(monitor='accuracy', patience=50, verbose=5, mode='max'),
+                ModelCheckpoint('model222.h5', monitor='val_accuracy', save_best_only=True, mode='max', reduce_retracing=True)
+            ]
+        )
+    if galo == 0:
+        while datetime.datetime.now().second != 58:
+                xd = "xd"
+    previsao = prediction(par,iq,time_frame,time)
+    comprar = "BUY"
+    vender = "SELL"
+    wait = "WAIT"
+    score = previsao[1]
+    if score :
+        blablabla = iq.get_balance()
+        if previsao[0] == comprar :
+            while datetime.datetime.now().second > 25:
+                xd = "xd"
+            check, id = iq.buy(bet_money, par, "call", 1)
+            print('Previsão para a próxima vela: compra')
+            trade = True
+            print(datetime.datetime.now().second)
+            time.sleep(5)
+        elif previsao[0] == vender:
+            while datetime.datetime.now().second > 25:
+                xd = "xd"
+            check, id = iq.buy(bet_money, par, "put", 1)
+            print('Previsão para a próxima vela: Venda')
+            trade = True
+            print(datetime.datetime.now().second)
+            time.sleep(5)
+        else:
+           trade = False
+           nrtentativas += 1
+        if trade:
+            checktempo()
+            betsies = iq.get_balance()
+            vaisefude = betsies - blablabla
+            print(vaisefude)
+            if vaisefude > 1:
+                print("WIN")
+                wins += 1
+                profit +=  vaisefude
+                pygame.mixer.music.load('ganhou.mp3')
+                pygame.mixer.music.play()
+             #   time.sleep(120)
+                nrtentativas += 1
+                if previsao[0] == comprar:
+                    treinar = False
+                    ganhos_compra.append(vaisefude)
+                    model.save('model222valid.h5')
+                elif previsao[0] == vender:
+                    treinar = False
+                    ganhos_venda.append(vaisefude)
+                    model.save('model222valid.h5')
+                galo = 0
+                df['SALDO'] = iq.get_balance()
+                # adicionando dados nos resultados de compra
+                bet_money = 1000
+                nrtentativas += 1
+                data = df.head(1)
+                with open(csv_file, 'a') as f:
+                    data.to_csv(f, header=False)
+              #  time.sleep(120)
+            else:
+                galo += 1
+                print('GALE =>', galo)
+                pygame.mixer.music.load('gale.mp3')
+                pygame.mixer.music.play()
+                data['SALDO'] = iq.get_balance()
+                if galo == 1:
+                    bet_money = 1000 * 2.55
+                    profit += vaisefude
+                    data['SALDO'] = iq.get_balance()
+                elif galo == 2:
+                    bet_money = 1000 * 4.55
+                    profit += vaisefude
+                    data['SALDO'] = iq.get_balance()
+                elif galo > 2:
+                    galo = 0
+                    loss += 1
+                    pygame.mixer.music.load('perdeu.mp3')
+                    pygame.mixer.music.play()
+                    profit += vaisefude
+                    print("loss")
+                    nrtentativas = 0
+                    time.sleep(30)
+                    treinar = True
+                    galo = 0
+                    bet_money = 1000
+                    data['SALDO'] = iq.get_balance()
+            print("PLACAR", "WINS:", wins, "x", loss, "LOSS:")
+            print("LUCRO::", profit)
+            if wins > stop_win:
+                print("Stop GAIN batido")
+                exit()
+            elif loss >= stop_loss:
+                print("Stop LOSS batido")
+                exit()
+    else:
+        trade = False
+        time.sleep(5)
+        nrtentativas += 1
+    if nrtentativas > 10:
+        treinar = True
+        nrtentativas = 0
+
+  #         # Reiniciando o número de tentativas
+  #         nrtentativas = 0
+
+  # # Dormindo por 60 segundos
+  # time.sleep(sleep_time)
